@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Welkom in Kompas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paars: #5B2D8E;
+    --paars-donker: #3E1E62;
+    --oranje: #F39200;
+    --lila: #F3EEF8;
+    --tekst: #2B2B33;
+    --zacht: #6B6478;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--lila);
+    color: var(--tekst);
+    font: 17px/1.65 Lato, Arial, sans-serif;
+  }
+  header {
+    background: var(--paars);
+    color: #fff;
+    padding: 56px 16px 72px;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; }
+  .label {
+    display: inline-block;
+    font: 700 12px/1 Montserrat, Arial, sans-serif;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--paars-donker);
+    background: var(--oranje);
+    padding: 6px 10px;
+    border-radius: 4px;
+  }
+  h1 {
+    font: 700 40px/1.15 Montserrat, Arial, sans-serif;
+    margin: 18px 0 8px;
+  }
+  header p { margin: 0; opacity: .85; }
+  main { padding: 0 16px 64px; }
+  .speler {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: -40px;
+    box-shadow: 0 6px 24px rgba(62, 30, 98, .14);
+  }
+  .speler h2 {
+    font: 600 15px/1.3 Montserrat, Arial, sans-serif;
+    margin: 0 0 12px;
+    color: var(--paars);
+  }
+  audio { width: 100%; }
+  .tekst {
+    background: #fff;
+    border-radius: 12px;
+    padding: 8px 24px;
+    margin-top: 20px;
+  }
+  .tekst h2 {
+    font: 600 15px/1.3 Montserrat, Arial, sans-serif;
+    color: var(--paars);
+    margin: 20px 0 4px;
+  }
+  footer {
+    color: var(--zacht);
+    font-size: 13px;
+    margin-top: 24px;
+  }
+  @media (max-width: 480px) { h1 { font-size: 30px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <span class="label">Kompas</span>
+    <h1>Welkom in Kompas</h1>
+    <p>Een korte uitleg van John van der Steen, ongeveer een minuut.</p>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+    <section class="speler">
+      <h2>Luister</h2>
+      <audio controls preload="metadata" src="welkomst.mp3?v={{VERSIE}}">
+        Je browser speelt geen audio af. Lees de tekst hieronder.
+      </audio>
+    </section>
+    <section class="tekst">
+      <h2>Uitgeschreven tekst</h2>
+{{TEKST}}
+    </section>
+    <footer>Stem gegenereerd met ElevenLabs · versie {{VERSIE}}</footer>
+  </div>
+</main>
+</body>
+</html>

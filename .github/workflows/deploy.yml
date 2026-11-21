@@ -1,0 +1,49 @@
+name: Welkomstwoord inspreken en publiceren
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publiceer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pagina en tekst bouwen
+        run: node build.mjs
+
+      - name: Inspreken met ElevenLabs
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+        run: |
+          jq -Rs '{
+            text: .,
+            model_id: "eleven_multilingual_v2",
+            voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.1, use_speaker_boost: true }
+          }' site/tekst.txt > verzoek.json
+          curl --fail-with-body -sS \
+            -X POST "https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}?output_format=mp3_44100_128" \
+            -H "xi-api-key: ${ELEVENLABS_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data @verzoek.json \
+            -o site/welkomst.mp3
+          ls -l site/welkomst.mp3
+          rm site/tekst.txt verzoek.json
+
+      - name: Publiceren op Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=kompas-welkom --branch=main --commit-dirty=true
+          preCommands: npx wrangler pages project create kompas-welkom --production-branch=main || true
