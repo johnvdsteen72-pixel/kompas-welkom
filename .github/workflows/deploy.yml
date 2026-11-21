@@ -6,6 +6,11 @@ on:
     # Alleen opnieuw inspreken als de inhoud verandert (kost ElevenLabs-tegoed).
     paths: [welkomst.md, template.html, build.mjs]
   workflow_dispatch:
+    inputs:
+      video_id:
+        description: "Bestaande HeyGen-video hergebruiken (video-ID), zodat er niet opnieuw betaald wordt"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -57,6 +62,10 @@ jobs:
           saldo=$(curl -sS https://api.heygen.com/v3/users/me -H "x-api-key: $HEYGEN_API_KEY" \
             | jq -r '.data.wallet.remaining_balance // "onbekend"')
           echo "Wallet-saldo: $saldo"
+          video_id="${{ inputs.video_id }}"
+          if [ -n "$video_id" ]; then
+            echo "Bestaande video hergebruiken: $video_id"
+          else
           # 1. Audio als asset uploaden (de nieuwe mp3 staat nog niet online).
           asset=$(curl --fail-with-body -sS -X POST https://api.heygen.com/v3/assets \
             -H "x-api-key: $HEYGEN_API_KEY" -F "file=@site/welkomst.mp3;type=audio/mpeg" \
@@ -77,9 +86,10 @@ jobs:
           video_id=$(echo "$antwoord" | jq -r '.data.video_id // empty')
           if [ -z "$video_id" ]; then echo "::error::HeyGen weigerde: $(echo "$antwoord" | jq -c '.error // .')"; exit 1; fi
           echo "Video-ID: $video_id"
-          # 3. Wachten tot de video klaar is.
+          fi
+          # 3. Wachten tot de video klaar is (bij hergebruik meteen klaar).
           for i in $(seq 1 80); do
-            sleep 15
+            [ "$i" -gt 1 ] && sleep 15
             stand=$(curl -sS "https://api.heygen.com/v3/videos/$video_id" -H "x-api-key: $HEYGEN_API_KEY")
             status=$(echo "$stand" | jq -r '.data.status')
             echo "[$i] $status"
@@ -91,8 +101,11 @@ jobs:
           done
           [ -f site/welkomst.mp4 ] || { echo "::error::Video niet op tijd klaar"; exit 1; }
           # Cloudflare Pages staat maximaal 25 MiB per bestand toe.
+          ls -l site/welkomst.mp4
           if [ $(stat -c %s site/welkomst.mp4) -gt 24000000 ]; then
-            ffmpeg -loglevel error -y -i site/welkomst.mp4 -c:v libx264 -crf 28 -preset slow -c:a aac -b:a 128k -movflags +faststart klein.mp4
+            command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null; }
+            ffmpeg -loglevel error -y -i site/welkomst.mp4 -vf "scale=-2:720" -c:v libx264 -crf 26 -preset slow \
+              -c:a aac -b:a 128k -movflags +faststart klein.mp4
             mv klein.mp4 site/welkomst.mp4
           fi
           ls -l site/welkomst.mp4
