@@ -47,6 +47,8 @@ jobs:
           HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KEY }}
           HEYGEN_AVATAR_ID: ${{ secrets.HEYGEN_AVATAR_ID }}
         timeout-minutes: 25
+        # Lukt de video niet (bijv. geen API-tegoed), dan gaat de pagina met alleen audio live.
+        continue-on-error: true
         run: |
           if [ -z "$HEYGEN_API_KEY" ] || [ -z "$HEYGEN_AVATAR_ID" ]; then
             echo "Geen HeyGen-secrets: alleen audio."; exit 0
