@@ -68,8 +68,8 @@ jobs:
             avatar_id: $av,
             audio_asset_id: $a,
             title: "Welkom in Kompas",
-            aspect_ratio: "16:9",
-            resolution: "720p"
+            aspect_ratio: "auto",
+            resolution: "1080p"
           }' > video.json
           antwoord=$(curl -sS -X POST https://api.heygen.com/v3/videos \
             -H "x-api-key: $HEYGEN_API_KEY" -H "Content-Type: application/json" \
