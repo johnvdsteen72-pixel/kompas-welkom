@@ -3,6 +3,8 @@ name: Welkomstwoord inspreken en publiceren
 on:
   push:
     branches: [main]
+    # Alleen opnieuw inspreken als de inhoud verandert (kost ElevenLabs-tegoed).
+    paths: [welkomst.md, template.html, build.mjs]
   workflow_dispatch:
 
 permissions:
@@ -46,4 +48,3 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy site --project-name=kompas-welkom --branch=main --commit-dirty=true
-          preCommands: npx wrangler pages project create kompas-welkom --production-branch=main || true
