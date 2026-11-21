@@ -59,6 +59,8 @@
     color: var(--paars);
   }
   audio { width: 100%; }
+  video { width: 100%; border-radius: 8px; background: #000; display: block; }
+  .speler h2.los { margin-top: 18px; }
   .tekst {
     background: #fff;
     border-radius: 12px;
@@ -89,7 +91,7 @@
 <main>
   <div class="wrap">
     <section class="speler">
-      <h2>Luister</h2>
+{{VIDEO}}
       <audio controls preload="metadata" src="welkomst.mp3?v={{VERSIE}}">
         Je browser speelt geen audio af. Lees de tekst hieronder.
       </audio>

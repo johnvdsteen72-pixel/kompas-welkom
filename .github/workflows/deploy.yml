@@ -42,6 +42,59 @@ jobs:
           ls -l site/welkomst.mp3
           rm site/tekst.txt verzoek.json
 
+      - name: Video met HeyGen (avatar praat op de ElevenLabs-audio)
+        env:
+          HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KEY }}
+          HEYGEN_AVATAR_ID: ${{ secrets.HEYGEN_AVATAR_ID }}
+        timeout-minutes: 25
+        run: |
+          if [ -z "$HEYGEN_API_KEY" ] || [ -z "$HEYGEN_AVATAR_ID" ]; then
+            echo "Geen HeyGen-secrets: alleen audio."; exit 0
+          fi
+          # 1. Audio als asset uploaden (de nieuwe mp3 staat nog niet online).
+          asset=$(curl --fail-with-body -sS -X POST https://upload.heygen.com/v1/asset \
+            -H "X-Api-Key: $HEYGEN_API_KEY" -H "Content-Type: audio/mpeg" \
+            --data-binary @site/welkomst.mp3 | jq -r '.data.id')
+          echo "Audio-asset: $asset"
+          # 2. Video starten: talking photo + eigen audio.
+          jq -n --arg tp "$HEYGEN_AVATAR_ID" --arg a "$asset" '{
+            video_inputs: [{
+              character: { type: "talking_photo", talking_photo_id: $tp },
+              voice: { type: "audio", audio_asset_id: $a },
+              background: { type: "color", value: "#F3EEF8" }
+            }],
+            dimension: { width: 1280, height: 720 },
+            title: "Welkom in Kompas"
+          }' > video.json
+          antwoord=$(curl -sS -X POST https://api.heygen.com/v2/video/generate \
+            -H "X-Api-Key: $HEYGEN_API_KEY" -H "Content-Type: application/json" --data @video.json)
+          video_id=$(echo "$antwoord" | jq -r '.data.video_id // empty')
+          if [ -z "$video_id" ]; then echo "::error::HeyGen weigerde: $antwoord"; exit 1; fi
+          echo "Video-ID: $video_id"
+          # 3. Wachten tot de video klaar is.
+          for i in $(seq 1 80); do
+            sleep 15
+            stand=$(curl -sS "https://api.heygen.com/v1/video_status.get?video_id=$video_id" -H "X-Api-Key: $HEYGEN_API_KEY")
+            status=$(echo "$stand" | jq -r '.data.status')
+            echo "[$i] $status"
+            if [ "$status" = "completed" ]; then
+              curl --fail -sS -L "$(echo "$stand" | jq -r '.data.video_url')" -o site/welkomst.mp4
+              break
+            fi
+            if [ "$status" = "failed" ]; then echo "::error::HeyGen-video mislukt: $(echo "$stand" | jq -c '.data.error')"; exit 1; fi
+          done
+          [ -f site/welkomst.mp4 ] || { echo "::error::Video niet op tijd klaar"; exit 1; }
+          # Cloudflare Pages staat maximaal 25 MiB per bestand toe.
+          if [ $(stat -c %s site/welkomst.mp4) -gt 24000000 ]; then
+            ffmpeg -loglevel error -y -i site/welkomst.mp4 -c:v libx264 -crf 28 -preset slow -c:a aac -b:a 128k -movflags +faststart klein.mp4
+            mv klein.mp4 site/welkomst.mp4
+          fi
+          ls -l site/welkomst.mp4
+          rm video.json
+
+      - name: Pagina opnieuw bouwen (met video als die er is)
+        run: node build.mjs --alleen-html
+
       - name: Publiceren op Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
