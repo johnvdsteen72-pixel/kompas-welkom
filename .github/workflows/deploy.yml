@@ -109,7 +109,7 @@ jobs:
             mv klein.mp4 site/welkomst.mp4
           fi
           ls -l site/welkomst.mp4
-          rm video.json
+          rm -f video.json
 
       - name: Pagina opnieuw bouwen (met video als die er is)
         run: node build.mjs --alleen-html
