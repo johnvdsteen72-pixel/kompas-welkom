@@ -1,23 +1,34 @@
-name: Welkomstwoord inspreken en publiceren
+name: Inspreken, filmen en publiceren
 
+# Per pagina in paginas.json: alleen als de tekst veranderde (of bij 'forceer') maakt de
+# workflow nieuwe audio (ElevenLabs) en video (HeyGen, ~$2 per minuut). De media gaan terug
+# in de repo (media/), zodat een volgende run ze hergebruikt. Daarna: Cloudflare Pages.
 on:
   push:
     branches: [main]
-    # Alleen opnieuw inspreken als de inhoud verandert (kost ElevenLabs-tegoed).
-    paths: [welkomst.md, template.html, build.mjs]
+    paths: ["*.md", paginas.json, template.html, build.mjs, scripts/**]
   workflow_dispatch:
     inputs:
+      forceer:
+        description: "Pagina('s) opnieuw maken, ook als de tekst niet veranderde (bijv. welkomst of 'welkomst handleiding')"
+        required: false
+        default: ""
       video_id:
-        description: "Bestaande HeyGen-video hergebruiken (video-ID), zodat er niet opnieuw betaald wordt"
+        description: "Bij één geforceerde pagina: bestaande HeyGen-video hergebruiken (video-ID)"
         required: false
         default: ""
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: publiceer
+  cancel-in-progress: false
 
 jobs:
   publiceer:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -25,94 +36,39 @@ jobs:
         with:
           node-version: 22
 
-      - name: Pagina en tekst bouwen
-        run: node build.mjs
+      - name: Welke pagina's hebben nieuwe media nodig?
+        id: nodig
+        run: |
+          lijst="$(node build.mjs --nodig | tr '\n' ' ') ${{ inputs.forceer }}"
+          lijst="$(echo $lijst | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+          echo "Nieuw te maken: ${lijst:-niets}"
+          echo "lijst=$lijst" >> "$GITHUB_OUTPUT"
 
-      - name: Inspreken met ElevenLabs
+      - name: Inspreken en filmen
+        if: steps.nodig.outputs.lijst != ' ' && steps.nodig.outputs.lijst != ''
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-        run: |
-          jq -Rs '{
-            text: .,
-            model_id: "eleven_multilingual_v2",
-            voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.1, use_speaker_boost: true }
-          }' site/tekst.txt > verzoek.json
-          curl --fail-with-body -sS \
-            -X POST "https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}?output_format=mp3_44100_128" \
-            -H "xi-api-key: ${ELEVENLABS_API_KEY}" \
-            -H "Content-Type: application/json" \
-            --data @verzoek.json \
-            -o site/welkomst.mp3
-          ls -l site/welkomst.mp3
-          rm site/tekst.txt verzoek.json
-
-      - name: Video met HeyGen (avatar praat op de ElevenLabs-audio)
-        env:
           HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KEY }}
           HEYGEN_AVATAR_ID: ${{ secrets.HEYGEN_AVATAR_ID }}
-        timeout-minutes: 25
-        # Lukt de video niet (bijv. geen API-tegoed), dan gaat de pagina met alleen audio live.
-        continue-on-error: true
         run: |
-          if [ -z "$HEYGEN_API_KEY" ] || [ -z "$HEYGEN_AVATAR_ID" ]; then
-            echo "Geen HeyGen-secrets: alleen audio."; exit 0
-          fi
-          # HeyGen API v3. Een API-key rekent af via de HeyGen-wallet (niet via de Creator-credits).
-          saldo=$(curl -sS https://api.heygen.com/v3/users/me -H "x-api-key: $HEYGEN_API_KEY" \
-            | jq -r '.data.wallet.remaining_balance // "onbekend"')
-          echo "Wallet-saldo: $saldo"
-          video_id="${{ inputs.video_id }}"
-          if [ -n "$video_id" ]; then
-            echo "Bestaande video hergebruiken: $video_id"
-          else
-          # 1. Audio als asset uploaden (de nieuwe mp3 staat nog niet online).
-          asset=$(curl --fail-with-body -sS -X POST https://api.heygen.com/v3/assets \
-            -H "x-api-key: $HEYGEN_API_KEY" -F "file=@site/welkomst.mp3;type=audio/mpeg" \
-            | jq -r '.data.asset_id')
-          echo "Audio-asset: $asset"
-          # 2. Video starten: eigen look (Avatar IV, de standaard) + eigen audio.
-          jq -n --arg av "$HEYGEN_AVATAR_ID" --arg a "$asset" '{
-            type: "avatar",
-            avatar_id: $av,
-            audio_asset_id: $a,
-            title: "Welkom in Kompas",
-            aspect_ratio: "auto",
-            resolution: "1080p"
-          }' > video.json
-          antwoord=$(curl -sS -X POST https://api.heygen.com/v3/videos \
-            -H "x-api-key: $HEYGEN_API_KEY" -H "Content-Type: application/json" \
-            -H "Idempotency-Key: kompas-welkom-${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}" --data @video.json)
-          video_id=$(echo "$antwoord" | jq -r '.data.video_id // empty')
-          if [ -z "$video_id" ]; then echo "::error::HeyGen weigerde: $(echo "$antwoord" | jq -c '.error // .')"; exit 1; fi
-          echo "Video-ID: $video_id"
-          fi
-          # 3. Wachten tot de video klaar is (bij hergebruik meteen klaar).
-          for i in $(seq 1 80); do
-            [ "$i" -gt 1 ] && sleep 15
-            stand=$(curl -sS "https://api.heygen.com/v3/videos/$video_id" -H "x-api-key: $HEYGEN_API_KEY")
-            status=$(echo "$stand" | jq -r '.data.status')
-            echo "[$i] $status"
-            if [ "$status" = "completed" ]; then
-              curl --fail -sS -L "$(echo "$stand" | jq -r '.data.video_url')" -o site/welkomst.mp4
-              break
-            fi
-            if [ "$status" = "failed" ]; then echo "::error::HeyGen-video mislukt: $(echo "$stand" | jq -c '.data | {failure_code, failure_message}')"; exit 1; fi
+          for naam in ${{ steps.nodig.outputs.lijst }}; do
+            echo "::group::$naam"
+            bash scripts/maak-media.sh "$naam" "${{ inputs.video_id }}"
+            echo "::endgroup::"
           done
-          [ -f site/welkomst.mp4 ] || { echo "::error::Video niet op tijd klaar"; exit 1; }
-          # Cloudflare Pages staat maximaal 25 MiB per bestand toe.
-          ls -l site/welkomst.mp4
-          if [ $(stat -c %s site/welkomst.mp4) -gt 24000000 ]; then
-            command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null; }
-            ffmpeg -loglevel error -y -i site/welkomst.mp4 -vf "scale=-2:720" -c:v libx264 -crf 26 -preset slow \
-              -c:a aac -b:a 128k -movflags +faststart klein.mp4
-            mv klein.mp4 site/welkomst.mp4
-          fi
-          ls -l site/welkomst.mp4
-          rm -f video.json
 
-      - name: Pagina opnieuw bouwen (met video als die er is)
-        run: node build.mjs --alleen-html
+      - name: Media terugzetten in de repo
+        run: |
+          git add media
+          if git diff --cached --quiet; then echo "Geen nieuwe media."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Media bijgewerkt: ${{ steps.nodig.outputs.lijst }}"
+          git push
+
+      - name: Site bouwen
+        run: node build.mjs
 
       - name: Publiceren op Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

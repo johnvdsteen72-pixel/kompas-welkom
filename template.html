@@ -45,6 +45,17 @@
     margin: 18px 0 8px;
   }
   header p { margin: 0; opacity: .85; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  nav a, nav span {
+    font: 600 13px/1 Montserrat, Arial, sans-serif;
+    padding: 8px 12px;
+    border-radius: 999px;
+    color: #fff;
+    text-decoration: none;
+    border: 1px solid rgba(255, 255, 255, .5);
+  }
+  nav a:hover { background: rgba(255, 255, 255, .12); }
+  nav span { background: #fff; color: var(--paars); border-color: #fff; }
   main { padding: 0 16px 64px; }
   .speler {
     background: #fff;
@@ -84,23 +95,22 @@
 <header>
   <div class="wrap">
     <span class="label">Kompas</span>
-    <h1>Welkom in Kompas</h1>
-    <p>Een korte uitleg van John van der Steen, ongeveer een minuut.</p>
+    <h1>{{TITEL}}</h1>
+    <p>{{ONDERTITEL}}</p>
+    <nav>{{NAV}}</nav>
   </div>
 </header>
 <main>
   <div class="wrap">
     <section class="speler">
 {{VIDEO}}
-      <audio controls preload="metadata" src="welkomst.mp3?v={{VERSIE}}">
-        Je browser speelt geen audio af. Lees de tekst hieronder.
-      </audio>
+{{AUDIO}}
     </section>
     <section class="tekst">
       <h2>Uitgeschreven tekst</h2>
 {{TEKST}}
     </section>
-    <footer>Stem gegenereerd met ElevenLabs · versie {{VERSIE}}</footer>
+    <footer>Stem: ElevenLabs · beeld: HeyGen · versie {{VERSIE}}</footer>
   </div>
 </main>
 </body>

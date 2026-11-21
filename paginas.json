@@ -1,0 +1,16 @@
+[
+  {
+    "naam": "welkomst",
+    "tekst": "welkomst.md",
+    "map": "",
+    "titel": "Welkom in Kompas",
+    "ondertitel": "Een korte uitleg van John van der Steen, ongeveer een minuut."
+  },
+  {
+    "naam": "handleiding",
+    "tekst": "handleiding.md",
+    "map": "handleiding",
+    "titel": "De handleiding van Kompas",
+    "ondertitel": "John van der Steen legt uit hoe je je weg vindt, ongeveer een minuut."
+  }
+]
