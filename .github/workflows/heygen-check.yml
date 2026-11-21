@@ -1,8 +1,12 @@
 name: HeyGen-koppeling controleren
 
-# Handmatig starten: toetst of HEYGEN_API_KEY werkt en toont je eigen avatars (naam + ID).
+# Handmatig starten: toetst of HEYGEN_API_KEY werkt en zoekt je eigen avatars (naam + ID).
 on:
   workflow_dispatch:
+    inputs:
+      zoek:
+        description: "Zoekterm in avatarnamen (hoofdletterongevoelig)"
+        default: "john|conclusion"
 
 permissions:
   contents: read
@@ -10,24 +14,33 @@ permissions:
 jobs:
   controleer:
     runs-on: ubuntu-latest
+    env:
+      HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KEY }}
+      ZOEK: ${{ inputs.zoek }}
     steps:
       - name: Key en tegoed
-        env:
-          HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KEY }}
         run: |
           if [ -z "$HEYGEN_API_KEY" ]; then echo "::error::Secret HEYGEN_API_KEY ontbreekt"; exit 1; fi
           curl --fail-with-body -sS https://api.heygen.com/v2/user/remaining_quota \
-            -H "X-Api-Key: $HEYGEN_API_KEY" | jq '.data // .'
+            -H "X-Api-Key: $HEYGEN_API_KEY" | jq -c '.data // .'
 
-      - name: Eigen avatars
-        env:
-          HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KEY }}
+      - name: Avatars en talking photos
         run: |
-          echo "== Avatargroepen (alleen eigen) =="
+          curl -sS https://api.heygen.com/v2/avatars -H "X-Api-Key: $HEYGEN_API_KEY" > avatars.json
+          echo "Totaal: $(jq '.data.avatars | length' avatars.json) avatars, $(jq '.data.talking_photos | length' avatars.json) talking photos"
+          jq -r --arg z "$ZOEK" '
+            ((.data.avatars // [])[] | select(.avatar_name | test($z; "i")) | "avatar\t\(.avatar_name)\t\(.avatar_id)"),
+            ((.data.talking_photos // [])[] | select(.talking_photo_name | test($z; "i")) | "photo\t\(.talking_photo_name)\t\(.talking_photo_id)")
+          ' avatars.json | sort -u
+
+      - name: Avatargroepen en hun looks
+        run: |
           curl -sS "https://api.heygen.com/v2/avatar_group.list?include_public=false" \
-            -H "X-Api-Key: $HEYGEN_API_KEY" \
-            | jq -r '(.data.avatar_group_list // [])[] | "\(.name)\t\(.id)\t\(.num_looks // "") looks"' || true
-          echo "== Talking photos en de eerste 15 avatars (ook publieke) =="
-          curl -sS https://api.heygen.com/v2/avatars \
-            -H "X-Api-Key: $HEYGEN_API_KEY" \
-            | jq -r '((.data.talking_photos // [])[] | "photo\t\(.talking_photo_name)\t\(.talking_photo_id)"), ((.data.avatars // [])[:15][] | "avatar\t\(.avatar_name)\t\(.avatar_id)")' || true
+            -H "X-Api-Key: $HEYGEN_API_KEY" > groepen.json
+          echo "Ruwe sleutels: $(jq -c '.data | keys? // .' groepen.json)"
+          for g in $(jq -r '(.data.avatar_group_list // [])[] | .id' groepen.json); do
+            naam=$(jq -r --arg g "$g" '.data.avatar_group_list[] | select(.id==$g) | .name' groepen.json)
+            echo "== Groep: $naam ($g)"
+            curl -sS "https://api.heygen.com/v2/avatar_group/$g/avatars" -H "X-Api-Key: $HEYGEN_API_KEY" \
+              | jq -r '(.data.avatar_list // .data // [])[]? | "look\t\(.name // .avatar_name)\t\(.id // .avatar_id)\t\(.status // "")"'
+          done
